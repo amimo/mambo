@@ -290,6 +290,21 @@ int mambo_free_scratch_reg(mambo_context *ctx, int reg) {
   return mambo_free_scratch_reg(ctx, 1 << reg);
 }
 
+// enables indirect control transfers directly to the current code cache location
+int mambo_add_identity_mapping(mambo_context *ctx) {
+  if (ctx->code.write_p == NULL) {
+    return -1;
+  }
+
+  uintptr_t addr = (uintptr_t)mambo_get_cc_addr(ctx);
+  if (ctx->code.inst_type == THUMB_INST) {
+    addr |= THUMB;
+  }
+
+  int ret = hash_add(&current_thread->entry_address, addr, addr);
+  return (ret) ? 0 : -1;
+}
+
 vm_op_t mambo_get_vm_op(mambo_context *ctx) {
   assert(ctx->event_type == VM_OP_C);
   return ctx->vm.op;
