@@ -109,6 +109,10 @@ int mambo_register_exit_cb(mambo_context *ctx, mambo_callback cb) {
   return __mambo_register_cb(ctx, EXIT_C, cb);
 }
 
+int mambo_register_vm_op_cb(mambo_context *ctx, mambo_callback cb) {
+  return __mambo_register_cb(ctx, VM_OP_C, cb);
+}
+
 /* Access plugin data */
 int mambo_set_plugin_data(mambo_context *ctx, void *data) {
   unsigned int p_id = ctx->plugin_id;
@@ -285,4 +289,40 @@ int mambo_free_scratch_regs(mambo_context *ctx, uint32_t regs) {
 int mambo_free_scratch_reg(mambo_context *ctx, int reg) {
   return mambo_free_scratch_reg(ctx, 1 << reg);
 }
+
+vm_op_t mambo_get_vm_op(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.op;
+}
+
+void *mambo_get_vm_addr(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.addr;
+}
+
+size_t mambo_get_vm_size(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.size;
+}
+
+int mambo_get_vm_prot(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.size;
+}
+
+int mambo_get_vm_flags(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.size;
+}
+
+int mambo_get_vm_filedes(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.filedes;
+}
+
+int mambo_get_vm_off(mambo_context *ctx) {
+  assert(ctx->event_type == VM_OP_C);
+  return ctx->vm.off;
+}
+
 #endif
