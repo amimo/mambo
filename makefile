@@ -21,12 +21,12 @@ CFLAGS+=-D_GNU_SOURCE -g -std=gnu99 -O2
 #CFLAGS+=-mcpu=native
 
 LDFLAGS+=-static -ldl -Wl,-Ttext-segment=$(or $(TEXT_SEGMENT),0xa8000000)
-LIBS=-lelf -lpthread
+LIBS=-lelf -lpthread -lz
 HEADERS=*.h makefile
 INCLUDES=-I/usr/include/libelf
 SOURCES= dispatcher.S common.c dbm.c traces.c syscalls.c dispatcher.c signals.c util.S
 SOURCES+=api/helpers.c api/plugin_support.c api/branch_decoder_support.c api/load_store.c api/internal.c
-SOURCES+=elf/elf_loader.o
+SOURCES+=elf/elf_loader.o elf/symbol_parser.o
 
 ARCH=$(shell $(CC) -dumpmachine | awk -F '-' '{print $$1}')
 ifeq ($(findstring arm, $(ARCH)), arm)

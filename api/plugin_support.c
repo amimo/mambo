@@ -113,6 +113,12 @@ int mambo_register_vm_op_cb(mambo_context *ctx, mambo_callback cb) {
   return __mambo_register_cb(ctx, VM_OP_C, cb);
 }
 
+int mambo_register_function_cb(mambo_context *ctx, char *fn_name,
+                               mambo_callback cb_pre, mambo_callback cb_post) {
+  if (cb_pre == NULL && cb_post == NULL) return -1;
+  return function_watch_add(&global_data.watched_functions, fn_name, ctx->plugin_id, cb_pre, cb_post);
+}
+
 /* Access plugin data */
 int mambo_set_plugin_data(mambo_context *ctx, void *data) {
   unsigned int p_id = ctx->plugin_id;
@@ -340,4 +346,7 @@ int mambo_get_vm_off(mambo_context *ctx) {
   return ctx->vm.off;
 }
 
+char *mambo_get_cb_function_name(mambo_context *ctx) {
+  return ctx->code.func_name;
+}
 #endif
