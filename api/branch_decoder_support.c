@@ -349,7 +349,7 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
         int offset = (count_bits(regs)-1) << 2;
         if (!u) offset = -offset;
         _arm_target_load(ctx, IMM_LDR, reg, rn, offset);
-        while(p != 0 || u != 1 || w != 1 || s != 0);
+        while(p != 0 || u != 1 || s != 0);
         return 0;
 	    }
       break;
@@ -358,7 +358,6 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
       uint32_t i, rd, rn, op2, p, u, w;
       arm_ldr_decode_fields(ctx->code.read_address, &i, &rd, &rn, &op2, &p, &u, &w);
       if (rd == pc) {
-        bool pause = false;
         if (w == 1) {
           w = 0;
         }
@@ -366,10 +365,8 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
           //p = 1;
           op2 = 0;
           i = IMM_LDR;
-          pause = true; // unverified
         }
         _arm_target_load(ctx, i, reg, rn, u ? op2 : -op2);
-        while(pause);
         return 0;
       }
       break;
