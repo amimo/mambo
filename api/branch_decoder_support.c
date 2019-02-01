@@ -365,6 +365,37 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
   return -1;
 }
 
+void _thumb_target_load_i(mambo_context *ctx, enum reg target, enum reg rn, int imm) {
+  if (rn == sp) {
+    // adjust here
+    imm += ctx->code.plugin_pushed_reg_count * sizeof(uintptr_t);
+  }
+
+  if (imm >= 0) {
+    assert(imm <= 0xFFF);
+    emit_thumb_ldrwi32(ctx, target, rn, imm);
+  } else {
+    assert(abs(imm) <= 0x7FF);
+    emit_thumb_ldri32(ctx, target, rn, abs(imm), 1, 0, 0);
+    while(1); // untested
+  }
+}
+
+void _thumb_target_load(mambo_context *ctx, enum reg target, enum reg rn, enum reg rm, uint32_t shift) {
+  assert(rn != pc);
+  if (rn == sp) {
+    int offset = ctx->code.plugin_pushed_reg_count * sizeof(uintptr_t);
+    // ADD TARGET, RN, RM, LSL #shift
+    // LDR TARGET, [TARGET, #offset]
+    assert(offset <= 0xFFF);
+    emit_thumb_add32(ctx, 0, rn, shift >> 2, target, shift, 0, rm);
+    emit_thumb_ldrwi32(ctx, target, target, offset);
+    while(1); // untested
+  } else {
+    emit_thumb_ldr32(ctx, rn, target, shift, rm);
+  }
+}
+
 int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
   uintptr_t target;
   void *read_address = mambo_get_source_addr(ctx);
@@ -382,7 +413,9 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
       thumb_movh16_decode_fields(read_address, &dn, &rm, &rdn);
       rdn |= dn << 3;
       if (rdn == pc) {
-        //
+        assert(rm != sp && rm != pc);
+        emit_thumb_movh16(ctx, (reg >> 3), rm, reg & 0x7);
+        return 0;
       }
       break;
     }
@@ -390,7 +423,9 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
       uint32_t reglist;
       thumb_pop16_decode_fields(read_address, &reglist);
       if (reglist & (1 << 8)) {
-        //
+        int offset = (count_bits(reglist)-1) << 2;
+        _thumb_target_load_i(ctx, reg, sp, offset);
+        return 0;
       }
       break;
     }
@@ -398,7 +433,13 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
       uint32_t rn, rt, imm8, p, u, w;
       thumb_ldri32_decode_fields(read_address, &rt, &rn, &imm8, &p, &u, &w);
       if (rt == pc) {
-        //
+        int offset = 0;
+        if (p) {
+          offset = u ? imm8 : -imm8;
+        }
+        _thumb_target_load_i(ctx, reg, rn, offset);
+        while(p); // untested
+        return 0;
       }
       break;
     }
@@ -406,28 +447,66 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
       uint32_t rn, rt, shift, rm;
       thumb_ldr32_decode_fields(read_address, &rn, &rt, &shift, &rm);
       if (rt == pc) {
-        //
+        _thumb_target_load(ctx, reg, rn, rm, shift);
+        return 0;
       }
       break;
     }
-    case THUMB_LDMFD32:
-    case THUMB_LDMEA32: {
+    case THUMB_LDMEA32:
+      while(1);
+      break;
+    case THUMB_LDMFD32: {
       uint32_t w, rn, reglist;
       thumb_ldmfd32_decode_fields(read_address, &w, &rn, &reglist);
-	    if (reglist & (1 << pc)) {
-	      //
-	    }
-	    break;
+      if (reglist & (1 << pc)) {
+        int offset = (count_bits(reglist)-1) << 2;
+        _thumb_target_load_i(ctx, reg, rn, offset);
+        return 0;
+      }
+      break;
     }
-    case THUMB_BX16: {
+    case THUMB_BX16:
+    case THUMB_BLX16: {
       uint32_t rm;
-      thumb_bx16_decode_fields(ctx->code.read_address, &rm);
-      emit_mov(ctx, reg, rm);
+      thumb_bx16_decode_fields(read_address, &rm);
+      if (rm == pc) {
+        emit_set_reg(ctx, reg, ((uint32_t)read_address + 4) & (~3));
+      } else {
+        emit_mov(ctx, reg, rm);
+      }
       return 0;
     }
     case THUMB_TBB32:
-    case THUMB_TBH32:
-      break;
+    case THUMB_TBH32: {
+      uint32_t rn, rm;
+      int sr = r0;
+      thumb_tbh32_decode_fields(read_address, &rn, &rm);
+      assert(rm != pc);
+      while (sr == rn || sr == rm || sr == reg) {
+        sr++;
+      }
+      if (rn == pc) {
+        rn = sr;
+      }
+
+      emit_push(ctx, 1 << sr);
+      emit_set_reg(ctx, sr, (uint32_t)read_address + 4);
+
+      if (inst == THUMB_TBB32) {
+        // LDRB reg, [RN, RM]
+        emit_thumb_ldrb32(ctx, rn, reg, 0, rm);
+      } else {
+        // LDRH reg, [RN, RM, LSL #1]
+        emit_thumb_ldrh32(ctx, rn, reg, 1, rm);
+      }
+      // ADD reg, sr, reg, LSL #1
+      emit_thumb_add32(ctx, 0, sr, 0, reg, 1, LSL, reg);
+      // ADD reg, reg, #1
+      emit_thumb_addi32(ctx, 0, 0, reg, 0, reg, 1);
+
+      emit_pop(ctx, 1 << sr);
+      return 0;
+    }
   } // switch
 
   return -1;
