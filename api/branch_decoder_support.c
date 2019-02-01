@@ -366,10 +366,20 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
 }
 
 int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
-  switch (ctx->code.inst) {
+  uintptr_t target;
+  void *read_address = mambo_get_source_addr(ctx);
+  int inst = mambo_get_inst(ctx);
+  /* First check if the instruction is a direct branch */
+  int ret = _thumb_get_dir_br_target(read_address, inst, &target);
+  if (ret == 0) {
+    emit_set_reg(ctx, reg, target);
+    return 0;
+  }
+
+  switch (inst) {
     case THUMB_MOVH16: {
       uint32_t dn, rm, rdn;
-      thumb_movh16_decode_fields(ctx->code.read_address, &dn, &rm, &rdn);
+      thumb_movh16_decode_fields(read_address, &dn, &rm, &rdn);
       rdn |= dn << 3;
       if (rdn == pc) {
         //
@@ -378,7 +388,7 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
     }
     case THUMB_POP16: {
       uint32_t reglist;
-      thumb_pop16_decode_fields(ctx->code.read_address, &reglist);
+      thumb_pop16_decode_fields(read_address, &reglist);
       if (reglist & (1 << 8)) {
         //
       }
@@ -386,7 +396,7 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
     }
     case THUMB_LDRI32: {
       uint32_t rn, rt, imm8, p, u, w;
-      thumb_ldri32_decode_fields(ctx->code.read_address, &rt, &rn, &imm8, &p, &u, &w);
+      thumb_ldri32_decode_fields(read_address, &rt, &rn, &imm8, &p, &u, &w);
       if (rt == pc) {
         //
       }
@@ -394,7 +404,7 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
     }
     case THUMB_LDR32: {
       uint32_t rn, rt, shift, rm;
-      thumb_ldr32_decode_fields(ctx->code.read_address, &rn, &rt, &shift, &rm);
+      thumb_ldr32_decode_fields(read_address, &rn, &rt, &shift, &rm);
       if (rt == pc) {
         //
       }
@@ -403,7 +413,7 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
     case THUMB_LDMFD32:
     case THUMB_LDMEA32: {
       uint32_t w, rn, reglist;
-      thumb_ldmfd32_decode_fields(ctx->code.read_address, &w, &rn, &reglist);
+      thumb_ldmfd32_decode_fields(read_address, &w, &rn, &reglist);
 	    if (reglist & (1 << pc)) {
 	      //
 	    }
@@ -415,21 +425,6 @@ int __thumb_calc_br_target(mambo_context *ctx, enum reg reg) {
       emit_mov(ctx, reg, rm);
       return 0;
     }
-    case THUMB_BLX16:
-      break;
-    case THUMB_BL32:
-      break;
-    case THUMB_BL_ARM32:
-      break;
-    case THUMB_B16:
-    case THUMB_B32:
-      break;
-    case THUMB_CBZ16:
-    case THUMB_CBNZ16:
-      break;
-    case THUMB_B_COND16:
-    case THUMB_B_COND32:
-      break;
     case THUMB_TBB32:
     case THUMB_TBH32:
       break;
