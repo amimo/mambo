@@ -260,23 +260,30 @@ mambo_branch_type mambo_get_branch_type(mambo_context *ctx) {
   return type;
 }
 
+#ifdef __arm__
 void _arm_target_load(mambo_context *ctx, uint32_t i, enum reg target, enum reg rn, int op2) {
-  if (i == LDR_REG) assert(op2 != sp);
-  if (rn == sp) {
-    // adjust here
-    if (i == IMM_LDR) {
-      op2 += ctx->code.plugin_pushed_reg_count * sizeof(uintptr_t);
-    } else {
-      while(1);
+  if (i == LDR_REG) assert((op2 & 0xF) != sp);
+  if (rn == pc) {
+    assert(i == IMM_LDR);
+    emit_set_reg(ctx, target, (uint32_t)mambo_get_source_addr(ctx) + 8 + op2);
+    // LDR target, [target]
+    emit_arm_ldr(ctx, i, target, target, 0, 1, 1, 0);
+  } else {
+    if (rn == sp) {
+      // adjust here
+      if (i == IMM_LDR) {
+        op2 += ctx->code.plugin_pushed_reg_count * sizeof(uintptr_t);
+      } else {
+        while(1); // unimplemented
+      }
     }
+    assert(abs(op2) <= 0xFFF);
+    emit_arm_ldr(ctx, i, target, rn, abs(op2), 1, (op2 >= 0) ? 1 : 0, 0);
+    while(i == LDR_REG); // untested
+    while(op2 < 0); // untested
   }
-  emit_arm_ldr(ctx, i, target, rn, abs(op2), 1, (op2 >= 0) ? 1 : 0, 0);
-  //while(1);
-  while(i == LDR_REG);
-  while(op2 < 0);
 }
 
-#ifdef __arm__
 int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
   switch(mambo_get_inst(ctx)) {
     case ARM_ADC:
@@ -287,10 +294,42 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
     case ARM_SBC:
     case ARM_SUB:
     case ARM_RSC: {
-      uint32_t immediate, opcode, set_flags, rd, rn, operand2, rm = reg_invalid;
-      arm_data_proc_decode_fields(ctx->code.read_address, &immediate, &opcode, &set_flags, &rd, &rn, &operand2);
+      uint32_t imm, opcode, set_flags, rd, rn, operand2, rm = reg_invalid, sr = reg_invalid, spilled_r = 0;
+      arm_data_proc_decode_fields(mambo_get_source_addr(ctx), &imm, &opcode, &set_flags, &rd, &rn, &operand2);
       if (rd == pc) {
-        //type = BRANCH_INDIRECT | BRANCH_INTERWORKING;
+        if (imm == REG_PROC) {
+          rm = operand2 & 0xF;
+        }
+        assert(rm != pc || rn != pc);
+        assert(rn != sp && rm != sp);
+        assert(rm != pc || operand2 == rm);
+        if (rn == pc || rm == pc) {
+          /* If the target register is different from the input registers, it can be used to
+             temporarily store the SPC
+             Otherwise, he have to spill a scratch register to the stack */
+          if ((rn == pc && reg != rm) || (rm == pc && reg != rn)) {
+            sr = reg;
+          } else {
+            sr = r0;
+            while (sr == reg || sr == rm) {
+              sr++;
+            }
+            spilled_r = 1 << sr;
+            emit_push(ctx, spilled_r);
+          }
+          if (rn == pc) {
+            rn = sr;
+          } else {
+            //rm = sr;
+            operand2 = sr;
+          }
+          emit_set_reg(ctx, sr, (uint32_t)mambo_get_source_addr(ctx) + 8);
+        }
+        emit_arm_data_proc(ctx, imm, opcode, 0, reg, rn, operand2);
+        if (spilled_r) {
+          emit_pop(ctx, spilled_r);
+        }
+        return 0;
       }
       break;
     }
@@ -309,11 +348,8 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
 	    if (regs & (1 << pc)) {
         int offset = (count_bits(regs)-1) << 2;
         if (!u) offset = -offset;
-        printf("  ldm: %p: %p\n", ctx->code.read_address, ctx->code.write_p);
-        //emit_arm_ldr(ctx, IMM_LDR, reg, rn, offset, 1, u, 0);
         _arm_target_load(ctx, IMM_LDR, reg, rn, offset);
         while(p != 0 || u != 1 || w != 1 || s != 0);
-        //while(1);
         return 0;
 	    }
       break;
@@ -322,20 +358,18 @@ int __arm_calc_br_target(mambo_context *ctx, enum reg reg) {
       uint32_t i, rd, rn, op2, p, u, w;
       arm_ldr_decode_fields(ctx->code.read_address, &i, &rd, &rn, &op2, &p, &u, &w);
       if (rd == pc) {
-        // wback = (P == ‘0’) || (W == ‘1’);
-        // index = (P == ‘1’);
+        bool pause = false;
         if (w == 1) {
-          //w = 0;
-          while(1);
+          w = 0;
         }
         if (p == 0) {
           //p = 1;
           op2 = 0;
           i = IMM_LDR;
+          pause = true; // unverified
         }
-        //emit_arm_ldr(ctx, i, reg, rn, op2, p, u, w);
         _arm_target_load(ctx, i, reg, rn, u ? op2 : -op2);
-        //while(1);
+        while(pause);
         return 0;
       }
       break;
