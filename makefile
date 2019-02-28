@@ -26,7 +26,7 @@ HEADERS=*.h makefile
 INCLUDES=-I/usr/include/libelf
 SOURCES= dispatcher.S common.c dbm.c traces.c syscalls.c dispatcher.c signals.c util.S
 SOURCES+=api/helpers.c api/plugin_support.c api/branch_decoder_support.c api/load_store.c
-SOURCES+=elf_loader/elf_loader.o
+SOURCES+=elf/elf_loader.o
 
 ARCH=$(shell $(CC) -dumpmachine | awk -F '-' '{print $$1}')
 ifeq ($(findstring arm, $(ARCH)), arm)
@@ -64,7 +64,7 @@ dbm: $(HEADERS) $(SOURCES) $(PLUGINS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OPTS) $(INCLUDES) -o $@ $(SOURCES) $(PLUGINS) $(PIE) $(LIBS)
 
 clean:
-	rm -f dbm elf_loader/elf_loader.o
+	rm -f dbm elf/elf_loader.o
 
 cleanall: clean
 	$(MAKE) -C pie/ clean
