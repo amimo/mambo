@@ -250,7 +250,8 @@ int syscall_handler_pre(uintptr_t syscall_no, uintptr_t *args, uint16_t *next_in
 #ifdef __arm__
     case __NR_sigaction:
       fprintf(stderr, "check sigaction()\n");
-      while(1);
+      break;
+      //while(1);
 #endif
     case __NR_rt_sigaction: {
       uintptr_t handler = 0xdead;
