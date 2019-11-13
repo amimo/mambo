@@ -545,8 +545,8 @@ void reset_process(dbm_thread *thread_data) {
       printf, which might have been locked by a different thread in the parent
       process. Here we open new, unlocked, stdout and stderr streams.
   */
-  stdout = fdopen(1, "a");
-  stderr = fdopen(2, "a");
+  //stdout = fdopen(1, "a");
+  //stderr = fdopen(2, "a");
 
   mambo_deliver_callbacks(PRE_THREAD_C, thread_data);
 }
