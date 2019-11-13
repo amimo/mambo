@@ -230,7 +230,10 @@ int load_elf(char *filename, Elf **ret_elf, struct elf_loader_auxv *auxv, uintpt
         while(1);
       }
       interp[phdr[i].p_filesz] = '\0';
-      
+      // Skip loading the program interpreter if it is the interpreter.
+      if (strcmp(filename, interp) == 0) {
+        break;
+      }
       load_elf(interp, ret_elf, auxv, entry_addr, true);
     }
   }
